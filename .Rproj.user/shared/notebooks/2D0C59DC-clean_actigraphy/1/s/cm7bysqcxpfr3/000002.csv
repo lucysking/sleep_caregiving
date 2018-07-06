@@ -1,0 +1,6 @@
+"0","```r
+#night before free play
+ggplot(mact_fp, aes(x = sleep_timebf)) + 
+  geom_histogram(bins = 30, position = \"dodge\", fill= \"gray\", color = \"black\") +
+  theme_bw() 
+```"

@@ -1,0 +1,409 @@
+---
+title: "Analyze Associations between Sleep and Caregiving"
+output: html_notebook
+---
+
+##Load data
+```{r load_data}
+##Libraries
+library(tidyverse)
+library(lme4)
+library(lmerTest)
+library(jtools)
+library(lcmm)
+
+##Parameters
+intervention_file <- "~/Desktop/BABIES/manber_sleep/ID and Tx Arm.csv"
+
+plot_trajectories_id <- function(dataframe, x, y) {
+  x_variable = enquo(x)
+  y_variable = enquo(y)
+  dataframe %>% 
+  ggplot(aes(!! x_variable, !! y_variable)) +
+    geom_jitter() +
+    geom_smooth(
+      aes(color = as.factor(ID)),
+      method = "lm", 
+      se = FALSE,
+      alpha = 1/2
+    ) +
+    geom_smooth(
+      method = "lm", 
+      se = FALSE, 
+      color = "black",
+      size = 2
+    ) +
+    theme_minimal() +
+    theme(
+      legend.position = "none"
+    )
+}
+
+plot_trajectories <- function(dataframe, x, y, color, method) {
+  x_variable = enquo(x)
+  y_variable = enquo(y)
+  color_variable = enquo(color)
+  
+  dataframe %>% 
+  ggplot(aes(x = !! x_variable, y = !! y_variable, color = !! color_variable)) +
+    geom_jitter() +
+    geom_smooth(
+      method = method, 
+      se = FALSE, 
+      size = 2
+    ) +
+    theme_minimal() 
+}
+```
+
+```{r}
+data_wf <-
+  free_play_wf %>% 
+  left_join(free_play_fa %>% select(ID, Factor1:Factor3), by = "ID") %>%  
+  left_join(read_csv(intervention_file), by = "ID") %>% 
+  left_join(questionnaires, by = "ID") %>% 
+  left_join(maternal_actigraphy_summary, by = "ID") 
+
+data_lf <-
+  free_play_lf %>% 
+  filter(Episode != 6) %>% 
+  left_join(read_csv(intervention_file), by = "ID") %>% 
+  left_join(questionnaires, by = "ID") %>% 
+  left_join(maternal_actigraphy_summary, by = "ID") %>% 
+  mutate(
+    episode_re = as.integer(
+      recode(
+        Episode,
+        "1" = "0",
+        "2" = "1",
+        "3" = "2",
+        "4" = "3",
+        "5" = "4"
+      )
+    ),
+    wake_time_grp = if_else(
+      mean_wake_time > 60,
+      "higher", "lower"
+    ),
+    efficiency_grp = if_else(
+      mean_efficiency > median(mean_efficiency, na.rm = TRUE),
+      "higher", "lower"
+    ),
+    ISI_grp = if_else(
+      ISI_total > median(ISI_total, na.rm = TRUE),
+      "higher", "lower"
+    ),
+    ISIP_grp = if_else(
+      ISI_total > median(ISIP_total, na.rm = TRUE),
+      "higher", "lower"
+    )
+  )
+```
+
+```{r}
+corr_data_wf <- data_wf %>%
+  select(
+    ISI_total,
+    ISIP_total,
+    EPDS_total,
+    mean_wake_time,
+    mean_sleep_time,
+    mean_efficiency,
+    B_nightwakeful,
+    B_sleepnight,
+    B_gotosleep,
+    B_sleepday,
+    Factor1,
+    Factor2,
+    Factor3,
+    sens_M,
+    intrus_M
+  )
+
+corr_data_wf <- cor(corr_data_wf, use = "pairwise.complete.obs")
+```
+
+Actigraphy measure of maternal sleep time is not associated with either version of the ISI; however, measure of time awake is positively associated with both of these measures. 
+
+##Trajectories of caregiving across the Free Play
+
+###Plot trajectories
+
+####sensitivity
+```{r}
+plot_trajectories_id(data_lf, episode_re, sens_fin)
+
+##treatment arm
+plot_trajectories_id(data_lf, episode_re, sens_fin) +
+  facet_grid(~Condition)
+
+plot_trajectories(data_lf, episode_re, sens_fin, Condition, method = "loess")
+
+##wake time
+plot_trajectories(
+  data_lf %>% 
+    filter(!is.na(wake_time_grp)),
+  episode_re, 
+  sens_fin, 
+  wake_time_grp, 
+  method = "loess"
+) +
+  theme(
+    aspect.ratio = 1
+  )
+
+##efficiency
+plot_trajectories(
+  data_lf %>% 
+    filter(!is.na(efficiency_grp)),
+  episode_re, 
+  sens_fin, 
+  efficiency_grp, 
+  method = "loess"
+) +
+  theme(
+    aspect.ratio = 1
+  )
+
+```
+
+####intrusiveness
+```{r}
+plot_trajectories_id(data_lf, episode_re, intrus_fin)
+
+##treatment arm
+plot_trajectories_id(data_lf, episode_re, intrus_fin) +
+  facet_grid(~Condition)
+
+plot_trajectories(data_lf, episode_re, intrus_fin, Condition, method = "loess")
+
+##wake time
+plot_trajectories(
+  data_lf %>% 
+    filter(!is.na(wake_time_grp)),
+  episode_re, 
+  intrus_fin, 
+  wake_time_grp, 
+  method = "loess"
+) +
+  theme(
+    aspect.ratio = 1
+  )
+
+##efficiency
+plot_trajectories(
+  data_lf %>% 
+    filter(!is.na(efficiency_grp)),
+  episode_re, 
+  intrus_fin, 
+  efficiency_grp, 
+  method = "loess"
+) +
+  theme(
+    aspect.ratio = 1
+  )
+```
+
+####stimulation
+```{r}
+plot_trajectories_id(data_lf, episode_re, stim_fin)
+
+##treatment arm
+plot_trajectories_id(data_lf, episode_re, stim_fin) +
+  facet_grid(~Condition)
+
+plot_trajectories(data_lf, episode_re, stim_fin, Condition, method = "loess")
+
+##wake time
+plot_trajectories(
+  data_lf %>% 
+    filter(!is.na(wake_time_grp)),
+  episode_re, 
+  stim_fin, 
+  wake_time_grp, 
+  method = "loess"
+) +
+  theme(
+    aspect.ratio = 1
+  )
+
+##efficiency
+plot_trajectories(
+  data_lf %>% 
+    filter(!is.na(efficiency_grp)),
+  episode_re, 
+  stim_fin, 
+  efficiency_grp, 
+  method = "loess"
+) +
+  theme(
+    aspect.ratio = 1
+  )
+
+##insomnia severity
+plot_trajectories(
+  data_lf %>% 
+    filter(!is.na(ISI_grp)),
+  episode_re, 
+  sens_fin, 
+  ISI_grp, 
+  method = "loess"
+) +
+  theme(
+    aspect.ratio = 1
+  )
+
+##postpartum insomnia severity
+plot_trajectories(
+  data_lf %>% 
+    filter(!is.na(ISIP_grp)),
+  episode_re, 
+  sens_fin, 
+  ISIP_grp, 
+  method = "loess"
+) +
+  theme(
+    aspect.ratio = 1
+  )
+
+```
+
+###Base Sensitivity MLM models
+```{r}
+sens_ml_1 <- lmer(sens_fin ~ Episode + (1|ID), REML = TRUE, data = data_lf)
+summary(sens_ml_1)
+sens_ml_2 <- lmer(sens_fin ~ Episode + (Episode|ID), REML = TRUE, data = data_lf)
+summary(sens_ml_2)
+
+ICC_intercept = .7612 / (.7612 + .3327)
+ICC_intercept
+
+ICC_slope = .03292 / (.74591 + .25163 + .03292)
+ICC_slope
+```
+Slope ICC is very low. Will not include in models. 
+
+###Sensitivity ~ Wake time MLM
+```{r}
+sens_ml_3 <- lmer(sens_fin ~ episode_re + mean_wake_time + (1|ID), REML = TRUE, data = data_lf)
+summary(sens_ml_3)
+
+sens_ml_4 <- lmer(sens_fin ~ episode_re * mean_wake_time + (1|ID), REML = TRUE, data = data_lf)
+
+sens_ml_5 <- lmer(sens_fin ~ episode_re * scale(mean_wake_time, scale = FALSE) + (1|ID), REML = TRUE, data = data_lf)
+summary(sens_ml_5)
+
+johnson_neyman(model = sens_ml_4, pred = episode_re, modx = mean_wake_time)
+```
+
+###Intrusiveness ~ Wake time MLM
+```{r}
+intrus_ml_1 <- lmer(intrus_fin ~ episode_re + mean_wake_time + (1|ID), REML = TRUE, data = data_lf)
+summary(intrus_ml_1)
+
+sens_ml_5 <- lmer(intrus_fin ~ episode_re * scale(mean_wake_time, scale = FALSE) + (1|ID), REML = TRUE, data = data_lf)
+summary(sens_ml_5)
+```
+
+###Intrusiveness ~ Wake time MLM
+```{r}
+stim_ml_1 <- lmer(stim_fin ~ episode_re + mean_wake_time + (1|ID), REML = TRUE, data = data_lf)
+summary(stim_ml_1)
+
+stim_ml_5 <- lmer(stim_fin ~ episode_re * scale(mean_wake_time, scale = FALSE) + (1|ID), REML = TRUE, data = data_lf)
+summary(stim_ml_5)
+```
+
+###ISI MLM
+```{r}
+sens_ml_6 <- lmer(sens_fin ~ episode_re + ISI_total + (1|ID), REML = TRUE, data = data_lf)
+summary(sens_ml_6)
+
+sens_ml_7 <- lmer(sens_fin ~ episode_re * scale(ISI_total, scale = FALSE) + (1|ID), REML = TRUE, data = data_lf)
+summary(sens_ml_7)
+```
+
+###ISI MLM
+```{r}
+sens_ml_8 <- lmer(sens_fin ~ episode_re + ISIP_total + (1|ID), REML = TRUE, data = data_lf)
+summary(sens_ml_8)
+
+sens_ml_9 <- lmer(sens_fin ~ episode_re * scale(ISIP_total, scale = FALSE) + (1|ID), REML = TRUE, data = data_lf)
+summary(sens_ml_9)
+```
+
+##Means across intervention arms
+```{r desc_cond}
+data_wf %>% 
+  group_by(Condition) %>%
+  summarise_at(
+    vars(
+      ISI_total, 
+      ISIP_total, 
+      mean_wake_time,
+      mean_efficiency,
+      mean_sleep_time,
+      sens_M:negreg_M
+    ),
+    funs(mean),
+    na.rm = TRUE
+  )
+```
+No substantial differences across actigraphy, self-report, or observational measures between though who received CBTI vs. ABTI. 
+
+##Latent Class Mixture Model
+```{r}
+library(lcmm)
+
+lcmm_sens_df <-
+  data_lf %>% 
+  select(
+    ID,
+    episode_re,
+    sens_fin
+  ) %>% 
+  mutate(
+    ID = as.character(ID)
+  )
+
+lcmm_sens <-
+  lcmm(sens_fin~episode_re, random = ~episode_re, subject = "ID", mixture = ~episode_re, ng = 2, idiag = TRUE, data = lcmm_sens_df, link = "linear")
+
+summary(lcmm_sens)
+postprob(lcmm_sens)
+```
+
+```{r}
+data_lf <-
+  data_lf %>% 
+  mutate(
+    ID = as.character(ID)
+  ) %>% 
+  left_join(
+    as.data.frame(lcmm_sens$pprob[, 1:3]) %>% 
+      select(ID, class) %>% 
+      mutate(
+        class = as.character(class)
+      ),
+    by = "ID"
+  ) 
+
+plot_trajectories(data_lf, episode_re, sens_fin, class, method = "lm")
+
+data_lf %>% 
+  filter(!is.na(wake_time_grp)) %>% 
+  ggplot(aes(class, sens_fin, fill = wake_time_grp)) +
+  geom_col(position = "dodge")
+```
+
+
+
+NOTES:
+DUKE
+awakenings (amount of time awake) from mom and due to infant
+early childhood adversity 
+look at variability in sensitivity
+
+
+
+

@@ -1,0 +1,66 @@
+---
+title: "Wrangle the Actigraphy Data"
+output: html_notebook
+---
+
+###Load data
+```{r load data}
+##Libraries
+library(lubridate)
+library(tidyverse)
+library(ggcorrplot)
+
+##Parameters
+
+#summary maternal actigraphy scores 
+maternal_actigraphy_summary_file <- "~/Desktop/BABIES/manber_sleep/data/Actigraphy Export File_maternal_caregiving_02.21.18_SLEEPSUM.csv"
+```
+
+###Wrangle summary scores
+```{r summary}
+maternal_actigraphy_summary <- read_csv(maternal_actigraphy_summary_file)
+
+maternal_actigraphy_summary <-
+  maternal_actigraphy_summary %>% 
+  gather(key1, value, duration:avg_sleep_b) %>% 
+  unite(key2, interval_number, key1, sep = "_") %>% 
+  spread(key2, value) %>% 
+  rename(
+    mean_sleep_time = `Average(n)_sleep_time`,
+    mean_wake_time = `Average(n)_wake_time`,
+    mean_efficiency = `Average(n)_efficiency`
+  )
+```
+
+###Distributions of summary scores
+```{r summary_plot}
+ggplot(maternal_actigraphy_summary, aes(x = mean_sleep_time/60)) +
+  geom_histogram(bins = 30, position = "dodge", fill = "gray", color = "black") +
+  theme_bw()
+
+ggplot(maternal_actigraphy_summary, aes(x = mean_wake_time/60)) +
+  geom_histogram(bins = 30, position = "dodge", fill = "gray", color = "black") +
+  theme_bw()
+
+ggplot(maternal_actigraphy_summary, aes(x = mean_efficiency)) +
+  geom_histogram(bins = 30, position = "dodge", fill = "gray", color = "black") +
+  theme_bw()
+```
+
+```{r}
+maternal_actigraphy_summary %>% 
+  ggplot(aes(mean_sleep_time, mean_wake_time)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+maternal_actigraphy_summary %>% 
+  ggplot(aes(mean_sleep_time, mean_efficiency)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+maternal_actigraphy_summary %>% 
+  ggplot(aes(mean_wake_time, mean_efficiency)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+```
+

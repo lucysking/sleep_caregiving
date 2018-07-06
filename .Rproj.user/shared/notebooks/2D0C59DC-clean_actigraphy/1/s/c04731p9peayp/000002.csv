@@ -1,0 +1,38 @@
+"0","```r
+#reformat dates using lubridate
+mact$start_date <- mdy(mact$start_date)
+fp_date$fp_date <- mdy(fp_date$date_fp)
+#merge with free play date file
+mact <- merge(mact, fp_date, by =\"ID\", all = T)
+#match free play date
+mact$night_bf <- mact$fp_date - days(1) #date of night before is free play date - 1 day
+mact$night_bf2 <- ifelse(mact$night_bf == mact$start_date, 1, 0)
+mact$night_aft <- ifelse(mact$fp_date == mact$start_date, 1, 0) #night after is the same date as the free play
+mact_bf <- subset(mact, night_bf2 == 1) #data from the night before the free play
+mact_bf <- mact_bf %>%
+  group_by(ID) %>%
+  summarise(
+    wake_time = sum(wake_time),
+    sleep_time = sum(sleep_time)
+  )
+mact_bf <- rename(mact_bf, wake_timebf = wake_time)
+mact_bf <- rename(mact_bf, sleep_timebf = sleep_time)
+mact_aft <- subset(mact, night_aft == 1) #data from the night after the free play
+mact_aft <- mact_aft %>%
+  group_by(ID) %>%
+  summarise(
+    wake_time = sum(wake_time),
+    sleep_time = sum(sleep_time)
+  )
+mact_aft <- rename(mact_aft, wake_timeaf = wake_time)
+mact_aft <- rename(mact_aft, sleep_timeaf = sleep_time)
+mact_fp <- merge(mact_bf, mact_aft, by = \"ID\", all = T)
+mact_fp <- mact_fp %>%
+  select(
+    ID, 
+    wake_timebf,
+    sleep_timebf,
+    wake_timeaf,
+    sleep_timeaf
+  )
+```"

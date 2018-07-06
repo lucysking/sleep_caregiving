@@ -1,0 +1,5 @@
+"0","```r
+ggplot(mact_fp, aes(x = wake_timeaf)) + 
+  geom_histogram(bins = 30, position = \"dodge\", fill= \"gray\", color = \"black\") +
+  theme_bw() 
+```"

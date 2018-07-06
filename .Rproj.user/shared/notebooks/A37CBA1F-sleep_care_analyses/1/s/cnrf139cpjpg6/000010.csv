@@ -1,0 +1,33 @@
+"0","data_lf <-
+  free_play_lf %>% 
+  filter(Episode != 6) %>% 
+  left_join(read_csv(intervention_file), by = ""ID"") %>% 
+  left_join(questionnaires, by = ""ID"") %>% 
+  left_join(maternal_actigraphy_summary, by = ""ID"") %>% 
+  mutate(
+    episode_re = as.integer(
+      recode(
+        Episode,
+        ""1"" = ""0"",
+        ""2"" = ""1"",
+        ""3"" = ""2"",
+        ""4"" = ""3"",
+        ""5"" = ""4""
+      )
+    ),
+    wake_time_grp = if_else(
+      mean_wake_time > 60,
+      ""higher"", ""lower""
+    ),
+    efficiency_grp = if_else(
+      mean_efficiency > median(mean_efficiency, na.rm = TRUE),
+      ""higher"", ""lower""
+    )
+  )
+"
+"2","Parsed with column specification:
+cols(
+  ID = col_integer(),
+  Condition = col_character()
+)
+"

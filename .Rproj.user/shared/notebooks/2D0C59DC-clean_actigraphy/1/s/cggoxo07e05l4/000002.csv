@@ -1,0 +1,5 @@
+"0","```r
+mact_all <- merge(mact_SUM, mact_fp, by = \"ID\", all = T)
+corr_mact <- cor(mact_all, use = \"pairwise.complete.obs\")
+corrplot(corr_mact, order = \"hclust\", tl.col='black', tl.cex=.75)
+```"

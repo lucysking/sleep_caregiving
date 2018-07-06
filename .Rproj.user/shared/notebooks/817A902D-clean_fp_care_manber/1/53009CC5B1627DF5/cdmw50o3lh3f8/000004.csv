@@ -1,0 +1,8 @@
+"0","EFA <- 
+  factanal(
+    ~ sens_M + intrus_M + posreg_M + stim_M, data = free_play_fa, rotation = ""varimax"", factors = 2, scores = ""regression"", na.action = na.omit
+    ) 
+"
+"2","Error in factanal(~sens_M + intrus_M + posreg_M + stim_M, data = free_play_fa,  : 
+  2 factors are too many for 4 variables
+"

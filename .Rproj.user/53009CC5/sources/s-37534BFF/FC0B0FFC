@@ -1,0 +1,29 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1530832556870.000,
+    "dirty" : false,
+    "encoding" : "",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "FC0B0FFC",
+    "lastKnownWriteTime" : 4294967302,
+    "last_content_update" : 1530832556870,
+    "path" : null,
+    "project_path" : null,
+    "properties" : {
+        "cacheKey" : "89DE0D2B",
+        "caption" : "free_play_wf",
+        "contentUrl" : "grid_resource/gridviewer.html?env=&obj=free_play_wf&cache_key=89DE0D2B",
+        "displayedObservations" : 67,
+        "environment" : "",
+        "object" : "free_play_wf",
+        "preview" : 0,
+        "totalObservations" : 67,
+        "variables" : 43
+    },
+    "relative_order" : 8,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_dataframe"
+}

@@ -1,0 +1,851 @@
+---
+title: "Analyze Associations between Sleep and Caregiving"
+output: html_notebook
+---
+
+##Load data
+```{r load_data}
+##Libraries
+library(tidyverse)
+library(lme4)
+library(lmerTest)
+library(jtools)
+
+##Parameters
+intervention_file <- "~/Desktop/BABIES/manber_sleep/ID and Tx Arm.csv"
+
+plot_trajectories_id <- function(dataframe, x, y) {
+  x_variable = enquo(x)
+  y_variable = enquo(y)
+  dataframe %>% 
+  ggplot(aes(!! x_variable, !! y_variable)) +
+    geom_jitter() +
+    geom_smooth(
+      aes(color = as.factor(ID)),
+      method = "lm", 
+      se = FALSE,
+      alpha = 1/2
+    ) +
+    geom_smooth(
+      method = "lm", 
+      se = FALSE, 
+      color = "black",
+      size = 2
+    ) +
+    theme_minimal() +
+    theme(
+      legend.position = "none"
+    )
+}
+
+plot_trajectories <- function(dataframe, x, y, color, method) {
+  x_variable = enquo(x)
+  y_variable = enquo(y)
+  color_variable = enquo(color)
+  
+  dataframe %>% 
+  ggplot(aes(x = !! x_variable, y = !! y_variable, color = !! color_variable)) +
+    geom_jitter() +
+    geom_smooth(
+      method = method, 
+      se = FALSE, 
+      size = 2
+    ) +
+    theme_minimal() 
+}
+```
+
+```{r}
+data_wf <-
+  free_play_wf %>% 
+  left_join(free_play_fa %>% select(ID, Factor1:Factor3), by = "ID") %>%  
+  left_join(read_csv(intervention_file), by = "ID") %>% 
+  left_join(questionnaires, by = "ID") %>% 
+  left_join(maternal_actigraphy_summary, by = "ID") 
+
+data_lf <-
+  free_play_lf %>% 
+  filter(Episode != 6) %>% 
+  left_join(read_csv(intervention_file), by = "ID") %>% 
+  left_join(questionnaires, by = "ID") %>% 
+  left_join(maternal_actigraphy_summary, by = "ID") %>% 
+  mutate(
+    episode_re = as.integer(
+      recode(
+        Episode,
+        "1" = "0",
+        "2" = "1",
+        "3" = "2",
+        "4" = "3",
+        "5" = "4"
+      )
+    ),
+    wake_time_grp = if_else(
+      mean_wake_time > 60,
+      "higher", "lower"
+    ),
+    efficiency_grp = if_else(
+      mean_efficiency > median(mean_efficiency, na.rm = TRUE),
+      "higher", "lower"
+    )
+  )
+  
+glimpse(data_wf)
+glimpse(data_lf)
+```
+
+```{r}
+corr_data_wf <- data_wf %>%
+  select(
+    ISI_total,
+    ISIP_total,
+    EPDS_total,
+    mean_wake_time,
+    mean_sleep_time,
+    mean_efficiency,
+    B_nightwakeful,
+    B_sleepnight,
+    B_gotosleep,
+    B_sleepday,
+    Factor1,
+    Factor2,
+    Factor3,
+    sens_M,
+    intrus_M
+  )
+
+corr_data_wf <- cor(corr_data_wf, use = "pairwise.complete.obs")
+```
+
+Actigraphy measure of maternal sleep time is not associated with either version of the ISI; however, measure of time awake is positively associated with both of these measures. 
+
+##Trajectories of caregiving across the Free Play
+
+###Plot trajectories
+
+####sensitivity
+```{r}
+plot_trajectories_id(data_lf, episode_re, sens_fin)
+
+##treatment arm
+plot_trajectories_id(data_lf, episode_re, sens_fin) +
+  facet_grid(~Condition)
+
+plot_trajectories(data_lf, episode_re, sens_fin, Condition, method = "loess")
+
+##wake time
+plot_trajectories(
+  data_lf %>% 
+    filter(!is.na(wake_time_grp)),
+  episode_re, 
+  sens_fin, 
+  wake_time_grp, 
+  method = "loess"
+) +
+  theme(
+    aspect.ratio = 1
+  )
+
+##efficiency
+plot_trajectories(
+  data_lf %>% 
+    filter(!is.na(efficiency_grp)),
+  episode_re, 
+  sens_fin, 
+  efficiency_grp, 
+  method = "loess"
+) +
+  theme(
+    aspect.ratio = 1
+  )
+
+```
+
+####intrusiveness
+```{r}
+plot_trajectories_id(data_lf, episode_re, intrus_fin)
+
+##treatment arm
+plot_trajectories_id(data_lf, episode_re, intrus_fin) +
+  facet_grid(~Condition)
+
+plot_trajectories(data_lf, episode_re, intrus_fin, Condition, method = "loess")
+
+##wake time
+plot_trajectories(
+  data_lf %>% 
+    filter(!is.na(wake_time_grp)),
+  episode_re, 
+  intrus_fin, 
+  wake_time_grp, 
+  method = "loess"
+) +
+  theme(
+    aspect.ratio = 1
+  )
+
+##efficiency
+plot_trajectories(
+  data_lf %>% 
+    filter(!is.na(efficiency_grp)),
+  episode_re, 
+  intrus_fin, 
+  efficiency_grp, 
+  method = "loess"
+) +
+  theme(
+    aspect.ratio = 1
+  )
+```
+
+####stimulation
+```{r}
+plot_trajectories_id(data_lf, episode_re, stim_fin)
+
+##treatment arm
+plot_trajectories_id(data_lf, episode_re, stim_fin) +
+  facet_grid(~Condition)
+
+plot_trajectories(data_lf, episode_re, stim_fin, Condition, method = "loess")
+
+##wake time
+plot_trajectories(
+  data_lf %>% 
+    filter(!is.na(wake_time_grp)),
+  episode_re, 
+  stim_fin, 
+  wake_time_grp, 
+  method = "loess"
+) +
+  theme(
+    aspect.ratio = 1
+  )
+
+##efficiency
+plot_trajectories(
+  data_lf %>% 
+    filter(!is.na(efficiency_grp)),
+  episode_re, 
+  stim_fin, 
+  efficiency_grp, 
+  method = "loess"
+) +
+  theme(
+    aspect.ratio = 1
+  )
+```
+
+###Base MLM models
+```{r}
+sens_ml_1 <- lmer(sens_fin ~ Episode + (1|ID), REML = TRUE, data = data_lf)
+summary(sens_ml_1)
+sens_ml_2 <- lmer(sens_fin ~ Episode + (Episode|ID), REML = TRUE, data = data_lf)
+summary(sens_ml_2)
+
+ICC_intercept = .7612 / (.7612 + .3327)
+ICC_intercept
+
+ICC_slope = .03292 / (.74591 + .25163 + .03292)
+ICC_slope
+```
+Slope ICC is very low. Will not include in models. 
+
+###Wake time MLM
+```{r}
+sens_ml_3 <- lmer(sens_fin ~ episode_re + mean_wake_time + (1|ID), REML = TRUE, data = data_lf)
+summary(sens_ml_3)
+
+sens_ml_4 <- lmer(sens_fin ~ episode_re * mean_wake_time + (1|ID), REML = TRUE, data = data_lf)
+
+sens_ml_5 <- lmer(sens_fin ~ episode_re * scale(mean_wake_time, scale = FALSE) + (1|ID), REML = TRUE, data = data_lf)
+
+johnson_neyman(model = sens_ml_4, pred = episode_re, modx = mean_wake_time)
+```
+
+
+
+
+##Trajectories of caregiving across the Free Play
+```{r care_change}
+sc_lf$EpisodeC <- scale(sc_lf$Episode, scale = F)
+
+sens_ep1 <- lmer(sens_fin ~ Episode + (1|ID), REML = F, data = sc_lf)
+sens_ep2 <- lmer(sens_fin ~ Episode + (Episode|ID), REML = F, data = sc_lf) #include random effect of episode 
+anova(sens_ep1, sens_ep2)
+summary(sens_ep2)
+
+intrus_ep <- lmer(intrus_fin ~ Episode + (Episode|ID), REML = F, data = sc_lf)
+summary(intrus_ep)
+
+posreg_ep <- lmer(posreg_fin ~ Episode + (Episode|ID), REML = F, data = sc_lf)
+summary(posreg_ep)
+
+stim_ep <- lmer(stim_fin ~ Episode + (Episode|ID), REML = F, data = sc_lf)
+summary(stim_ep)
+
+ggplot(sc_lf, aes(x=Episode, y = sens_fin)) +
+  geom_point(position=position_jitter(height=0.05, width=.04)) +
+  geom_smooth(method = "lm")
+
+ggplot(sc_lf, aes(x=Episode, y = posreg_fin)) +
+  geom_point(position=position_jitter(height=0.05, width=.04)) +
+  geom_smooth(method = "lm")
+
+ggplot(sc_lf, aes(x=Episode, y = intrus_fin)) +
+  geom_point(position=position_jitter(height=0.05, width=.04)) +
+  geom_smooth(method = "lm")
+```
+Sensitivity, significantly decreases across epochs (p=.009), as does positive regard (p = .001) and stimulation (marginally; p = .064), whereas intrusivness significantly increases (p = .005). This justifies examining interactions with sleep and episode in explaining caregiver behavior as well as looking in the final epochs in which caregivers may be more taxed or behaving with a reduced observer effect. 
+
+##Create epoch-specific variables 
+```{r}
+##create average of first two versus final two epochs
+sc$sens12 <- (sc$sens_fin.1 + sc$sens_fin.2)/2 #average sensitivity in first four minutes
+sc$sens45 <- (sc$sens_fin.4 + sc$sens_fin.5)/2 #average sensitivity in last four minutes
+sc$sens45 <- ifelse(is.na(sc$sens_fin.5), sc$sens_fin.4, sc$sens45) 
+
+sc$posreg12 <- (sc$posreg_fin.1 + sc$posreg_fin.2)/2
+sc$posreg45 <- (sc$posreg_fin.4 + sc$posreg_fin.5)/2
+sc$posreg45 <- ifelse(is.na(sc$posreg_fin.5), sc$posreg_fin.4, sc$posreg45)
+
+sc$intrus12 <- (sc$intrus_fin.1 + sc$intrus_fin.2)/2
+sc$intrus45 <- (sc$intrus_fin.4 + sc$intrus_fin.5)/2
+sc$intrus45 <- ifelse(is.na(sc$intrus_fin.5), sc$intrus_fin.4, sc$intrus45)
+
+sc$stim12 <- (sc$stim_fin.1 + sc$stim_fin.2)/2
+sc$stim45 <- (sc$stim_fin.4 + sc$stim_fin.5)/2
+sc$stim45 <- ifelse(is.na(sc$stim_fin.5), sc$stim_fin.4, sc$stim45)
+```
+
+##Means across intervention arms
+```{r desc_cond}
+condition_desc <- sc %>%
+  group_by(Condition) %>%
+  summarise(
+    M_av_waketime = mean(av_waketime, na.rm =T),
+    M_wake_timebf = mean(wake_timebf, na.rm =T),
+    M_av_sleeptime = mean(av_sleeptime, na.rm =T),
+    M_B_gotosleep = mean(B_gotosleep, na.rm = T),
+    M_B_nightwakeful = mean(B_nightwakeful, na.rm =T),
+    M_ISI_tot = mean(ISI_tot, na.rm = T),
+    M_ISI_totPP = mean(ISI_totPP, na.rm = T),
+    M_sens_M = mean(sens_M, na.rm = T),
+    M_sens45 = mean(sens45, na.rm =T),
+    M_intrus_M = mean(intrus_M, na.rm =T),
+    M_intrus45 = mean(intrus45, na.rm = T),
+    M_detach_max = mean(detach_max, na.rm = T),
+    M_posreg_M = mean(posreg_M, na.rm = T),
+    M_posreg45 = mean(posreg45, na.rm = T),
+    M_stim_M = mean(stim_M, na.rm = T),
+    M_stim45 = mean(stim45, na.rm =T)
+  )
+
+condition_desc
+```
+No substantial differences across actigraphy, self-report, or observational measures between though who received CBTI vs. ABTI. 
+
+##Caregiving and ISI
+```{r ISI_plots}
+ggplot(sc, aes(x = ISI_tot, y = sens_M)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = ISI_tot, y = sens12)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = ISI_tot, y = sens45)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = ISI_tot, y = posreg_M)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = ISI_tot, y = posreg12)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = ISI_tot, y = posreg45)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = ISI_tot, y = intrus_M)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = ISI_tot, y = intrus12)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = ISI_tot, y = intrus45)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = ISI_tot, y = stim_M)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = ISI_tot, y = stim12)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = ISI_tot, y = stim45)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = ISI_tot, y = detach_max)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+```
+
+##Caregiving and Postpartum ISI
+"Now please answer these questions again focusing only on difficulties sleeping that were not related to your infant. For example, if you took care of the baby in the middle of the night or too early in the morning, consider only the time that it took you to fall back asleep."
+```{r ISIPP_plots}
+ggplot(sc, aes(x = ISI_totPP, y = sens_M)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = ISI_totPP, y = sens12)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = ISI_totPP, y = sens45)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = ISI_totPP, y = posreg_M)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = ISI_totPP, y = posreg12)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = ISI_totPP, y = posreg45)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = ISI_totPP, y = intrus_M)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = ISI_totPP, y = intrus12)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = ISI_totPP, y = intrus45)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = ISI_totPP, y = stim_M)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = ISI_totPP, y = stim12)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = ISI_totPP, y = stim45)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = ISI_totPP, y = detach_max)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+```
+
+##Sensitivity ~ ISI regressions
+```{r sens_ISI}
+#ISI
+ISI_sens1 <- lm(sens_M ~ ISI_tot, data = sc)
+ISI_sens2 <- lm(sens_M ~ ISI_tot + epds_tot, data = sc)
+AIC(ISI_sens1)
+AIC(ISI_sens2) #epds does not improve model fit, drop term
+summary(ISI_sens1)
+
+ISI_sens12_1 <- lm(sens12 ~ ISI_tot, data = sc)
+ISI_sens12_2 <- lm(sens12 ~ ISI_tot + epds_tot, data = sc)
+AIC(ISI_sens12_1)
+AIC(ISI_sens12_2) #epds does not improve model fit, drop term
+summary(ISI_sens12_1)
+
+ISI_sens45_1 <- lm(sens45 ~ ISI_tot, data = sc)
+ISI_sens45_2 <- lm(sens45 ~ ISI_tot + epds_tot, data = sc)
+AIC(ISI_sens45_1)
+AIC(ISI_sens45_2) #epds does not improve model fit, drop term
+summary(ISI_sens45_1)
+
+#ISI Postpartum 
+ISIP_sens_1 <- lm(sens_M ~ ISI_totPP, data = sc)
+ISIP_sens_2 <- lm(sens_M ~ ISI_totPP + epds_tot, data = sc)
+AIC(ISIP_sens_1)
+AIC(ISIP_sens_2) #epds does not improve model fit, drop term
+summary(ISIP_sens_1)
+
+ISIP_sens12_1 <- lm(sens12 ~ ISI_totPP, data = sc)
+ISIP_sens12_2 <- lm(sens12 ~ ISI_totPP + epds_tot, data = sc)
+AIC(ISIP_sens12_1)
+AIC(ISIP_sens12_2) #epds does not improve model fit, drop term
+summary(ISIP_sens12_1)
+
+ISIP_sens45_1 <- lm(sens45 ~ ISI_totPP, data = sc)
+ISIP_sens45_2 <- lm(sens45 ~ ISI_totPP + epds_tot, data = sc)
+AIC(ISIP_sens45_1)
+AIC(ISIP_sens45_2) #epds does not improve model fit, drop term
+summary(ISIP_sens45_1)
+
+ggplot(sc, aes(x = ISI_totPP, y = sens45)) +
+  geom_point(size = 2) +
+  geom_smooth(method = "lm", size = 2) +
+  xlab("Postpartum Insomnia Severity") +
+  ylab("Maternal Sensitivity") +
+  theme_bw() +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),axis.title.y = element_text(size=16), axis.text.y = element_text(size = 16), axis.title.x = element_text(size=16), axis.text.x = element_text(size = 16))
+
+##ISI in sample restricted to those with ISI postpartum
+sc_sub <- filter(sc, !is.na(ISI_totPP) & !is.na(sens_M))
+ISI_sens_sub <- lm(sens_M ~ ISI_tot, data = sc_sub)
+summary(ISI_sens_sub)
+
+ISI_sens45_sub <- lm(sens45~ ISI_tot, data = sc_sub)
+summary(ISI_sens45_sub)
+AIC(ISI_sens45_sub)
+```
+In full sample (N=67), ISI is negatively associated with mean sensitivity and sensitivity in the final epoch when controlling for depression, but this association is not significant. Pospartum ISI (N=57) is negatively associated with mean sensitivity but this is association is marginal (p = .064), explaining aproximately 6% of the variance. Postpartum ISI is y negatively associated  at the end of free play (average sensitivity in epochs 4 and 5) but this association is also marginal (p = 0.075), explaining aproximately 6% of the variance in sensitivity.
+
+To ensure that the stronger effects for postpartum ISI were not due to the restricted sample, I reran analyses with the unmodified ISI among the 57 mothers with complete data. Although associations with sensitivity were slightly stronger in this subsample, the total ISI score was still not significantly or marginally associated with sensitivity.
+
+##Intrusiveness ~ ISI regressions
+```{r intrus_ISI}
+#ISI
+ISI_intrus <- lm(intrus_M ~ ISI_tot, data = sc)
+summary(ISI_intrus)
+
+ISI_intrus45 <- lm(intrus45 ~ ISI_tot, data = sc)
+summary(ISI_intrus45)
+
+#ISI Postpartum 
+ISIP_instrus<- lm(intrus_M ~ ISI_totPP , data = sc)
+summary(ISIP_instrus)
+
+ISIP_intrus5 <- lm(intrus45 ~ ISI_totPP, data = sc)
+summary(ISIP_intrus5)
+```
+
+No significant associations between either ISI and intrusiveness. 
+
+##Positive Regard ~ ISI regressions
+```{r posreg_ISI}
+#ISI
+ISI_posreg <- lm(posreg_M ~ ISI_tot, data = sc)
+summary(ISI_posreg)
+
+ISI_posreg45 <- lm(posreg45 ~ ISI_tot, data = sc)
+summary(ISI_posreg45)
+
+#ISI Postpartum 
+ISIP_posreg<- lm(posreg_M ~ ISI_totPP, data = sc)
+summary(ISIP_posreg)
+
+ISIP_posreg45 <- lm(posreg45 ~ ISI_totPP, data = sc)
+summary(ISIP_posreg45)
+```
+
+No significant associations between either ISI and positive regard. 
+
+##Stimulation ~ ISI regressions
+```{r stim_ISI}
+#ISI
+ISI_stim <- lm(stim_M ~ ISI_tot, data = sc)
+summary(ISI_stim)
+
+ISI_stim45 <- lm(stim45 ~ ISI_tot, data = sc)
+summary(ISI_stim45)
+
+#ISI Postpartum 
+ISIP_stim<- lm(stim_M ~ ISI_totPP, data = sc)
+summary(ISIP_stim)
+
+ISIP_stim45 <- lm(stim45~ ISI_totPP, data = sc)
+summary(ISIP_stim45)
+```
+No significant associations between either ISI and stimulation.
+
+##ISI * Episode Interactions
+```{r ISI_ep}
+#centering variables
+sc_lf$epdsC <- scale(sc_lf$epds_tot, scale = F)
+sc_lf$ISI_totPPC <- scale(sc_lf$ISI_totPP, scale = F)
+
+#postpartum ISI
+sens_epISIPP <- lmer(sens_fin ~ EpisodeC * ISI_totPPC + (EpisodeC|ID), REML = F, data = sc_lf)
+summary(sens_epISIPP)
+
+intrus_epISIPP <- lmer(intrus_fin ~ EpisodeC * ISI_totPPC + (EpisodeC|ID), REML = F, data = sc_lf)
+summary(intrus_epISIPP)
+
+posreg_epISIPP <- lmer(posreg_fin ~ EpisodeC * ISI_totPPC + (EpisodeC|ID), REML = F, data = sc_lf)
+summary(posreg_epISIPP)
+
+stime_epISIPP <- lmer(stim_fin ~ EpisodeC * ISI_totPPC + (Episode|ID), REML = F, data = sc_lf)
+summary(stime_epISIPP)
+```
+No significant interactions between postpartum ISI and episode in explaining caregiving behavior. 
+## Actigraphy Maternal Sleep Time and Caregiving
+```{r sleeptime_plots}
+ggplot(sc, aes(x = av_sleeptime, y = sens_M)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = av_sleeptime, y = sens45)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = av_sleeptime, y = posreg_M)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = av_sleeptime, y = posreg45)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = av_sleeptime, y = intrus_M)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = av_sleeptime, y = intrus45)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = av_sleeptime, y = stim_M)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = av_sleeptime, y = stim45)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = av_sleeptime, y = detach_max)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+```
+
+## Actigraphy Maternal Wake Time and Caregiving
+```{r waketime_plots}
+ggplot(sc, aes(x = av_waketime, y = sens_M)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = av_waketime, y = sens45)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = av_waketime, y = posreg_M)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = av_waketime, y = posreg45)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = av_waketime, y = intrus_M)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = av_waketime, y = intrus45)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = av_waketime, y = stim_M)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = av_waketime, y = stim45)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = av_waketime, y = detach_max)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+```
+
+##Sensitivity ~ Waketime Regressions
+```{r sens_waketime}
+mwake_sens1_1 <- lm(sens_M ~ av_waketime, data = sc)
+mwake_sens1_2 <- lm(sens_M ~ av_waketime + epds_tot, data = sc)
+mwake_sens1_3 <- lm(sens_M ~ av_waketime + epds_tot + n_nights, data = sc)
+AIC(mwake_sens1_1)
+AIC(mwake_sens1_2) #epds does not improve model fit, drop terms
+AIC(mwake_sens1_3) #number of nights does not improve model fit, drop terms
+summary(mwake_sens1_1)
+
+mwake_sens12_1 <- lm(sens12 ~ av_waketime, data = sc)
+mwake_sens12_2 <- lm(sens12 ~ av_waketime + epds_tot, data = sc)
+summary(mwake_sens12_1)
+
+mwake_sens45_1 <- lm(sens45 ~ av_waketime, data = sc)
+mwake_sens45_2 <- lm(sens45 ~ av_waketime + epds_tot, data = sc)
+AIC(mwake_sens45_1)
+AIC(mwake_sens45_2) #epds does not improve model fit, drop terms
+summary(mwake_sens45_2)
+summary(mwake_sens45_1)
+
+ggplot(sc_sub, aes(x = av_waketime, y = sens45)) +
+  geom_point(size = 2) +
+  geom_smooth(method = "lm", size = 2) +
+  xlab("Maternal Average Time Awake") +
+  ylab("Maternal Sensitivity") +
+  theme_bw() +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),axis.title.y = element_text(size=25), axis.text.y = element_text(size = 22), axis.title.x = element_text(size=25), axis.text.x = element_text(size = 22))
+```
+Maternal waketime is marginally associated with mean sensitivity (p = .074), explaining 6% of the variance and significantly negatively associated with sensitivity during the end of the Free Play (p = .019), explaining approximately 10% of the variance. Maternal wake time is not significantly or marginally associated with sensitivity in the initial epochs (p = .308).
+
+##Waketime * Episode Interactions
+```{r ep_waketime}
+sc_lf$av_waketimeC <- scale(sc_lf$av_waketime, scale = F)
+sc_lf$EpisodeC <- scale(sc_lf$Episode)
+
+#random intercepts only
+sens_epWTint <- lmer(sens_fin  ~  EpisodeC * av_waketimeC  + (1|ID), REML = T, data = sc_lf)
+summary(sens_epWTint)
+
+#random slopes and intercepts 
+sens_epWTslp <- lmer(sens_fin ~  EpisodeC * av_waketimeC + (EpisodeC|ID), REML = T, data = sc_lf)
+summary(sens_epWTslp)
+anova(sens_epWTint, sens_epWTslp, refit = FALSE) #model with slope is better
+
+#final model
+sens_epWT <- lmer(sens_fin ~  EpisodeC* av_waketimeC + (Episode|ID), REML = F, data = sc_lf)
+summary(sens_epWT)
+
+#visual individual trajectories
+ggplot(sc_lf, aes(x = Episode, y = sens_fin, group = factor(ID))) + 
+  geom_point(aes(color = factor(ID))) +
+  geom_smooth(method = "lm", se = FALSE, aes(color = factor(ID))) +
+  theme(legend.position = "none")
+
+#visualize interaction 
+ggplot(sc_lf, aes(x = av_waketime, y = sens_fin, group = Episode)) + 
+  geom_point(position=position_jitter(height=0.06, width=.04), aes(color = Episode)) +
+  geom_smooth(method = "lm", se = FALSE, aes(color = Episode)) +
+  scale_x_continuous(breaks = pretty(sc_lf$av_waketime, n = 10)) +
+  xlab("Average Time Awake") +
+  ylab("Maternal Sensitivity")
+```
+Marginal interaction between maternal time awake and episode in explaining sensitivity, such that time awake is more strongly associated with sensitivity in the final epochs. Significant when only including random intercept. The fact that the interaction becomes marginal when including the random slope indicates that the effect of epoch is different from different people. Suggests I should explore other variables that may explain this individual variabiliaty. 
+
+Other notes:
+There may be unobserved subgroups here. For example, while on average mother decrease and especially mothers who spend more time awake, some mothers start out low and stay low. Are these mothers having similar sleep problems? Possible growth mixture model; examine factors such as maternal attachment and maltreatment history.
+
+##Actigraphy Night Before Maternal Sleep Time
+```{r nbf_sleeptime_plots}
+ggplot(sc, aes(x = sleep_timebf, y = sens_M)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = sleep_timebf, y = sens45)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = sleep_timebf, y = posreg_M)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = sleep_timebf, y = posreg45)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = sleep_timebf, y = intrus_M)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = sleep_timebf, y = intrus45)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = sleep_timebf, y = stim_M)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = sleep_timebf, y = stim45)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = sleep_timebf, y = detach_max)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+```
+
+##Actigraphy Maternal Sleep Time Night Before
+```{r nbf_waketime_plots}
+ggplot(sc, aes(x = wake_timebf, y = sens_M)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = wake_timebf, y = sens45)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = wake_timebf, y = posreg_M)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = wake_timebf, y = posreg45)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = wake_timebf, y = intrus_M)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = wake_timebf, y = intrus45)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = wake_timebf, y = stim_M)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = wake_timebf, y = stim45)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+ggplot(sc, aes(x = wake_timebf, y = detach_max)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+```
+
+##Sensitivity ~ Wake Time Night Before Free Play
+```{r sens_bfwaketime}
+bfmwake_sens1_1 <- lm(sens_M ~ wake_timebf, data = sc)
+bfmwake_sens1_2 <- lm(sens_M ~ wake_timebf + epds_tot, data = sc)
+AIC(bfmwake_sens1_1)
+AIC(bfmwake_sens1_2) #epds does not improve model fit, drop terms
+summary(bfmwake_sens1_1)
+
+bfmwake_sens45_1 <- lm(sens45 ~ wake_timebf, data = sc)
+bfmwake_sens45_2 <- lm(sens45 ~ wake_timebf + epds_tot, data = sc)
+AIC(bfmwake_sens45_1)
+AIC(bfmwake_sens45_2) #epds does not improve model fit, drop terms
+summary(bfmwake_sens45_1)
+
+#restrict sample to those with complete data 
+sc_sub_wt <- subset(sc, !is.na(wake_timebf))
+wake_sens_sub <- lm(sens45 ~ wake_timebf, data = sc_sub_wt)
+summary(wake_sens_sub)
+```
+Amount of time awake on the night before the free play is negatively associated with sensitivity, but this association is not significant. However, this is likely a power issue because when I restrict the sample to only those with actigraphy data on the night before, the effect of average wake time is no longer significant and explains less variance than wake time on the night before (we lose N=23 when looking only at the night before).
+
+
+NOTES:
+DUKE
+awakenings (amount of time awake) from mom and due to infant
+early childhood adversity 
+look at variability in sensitivity
+
+
+
+
