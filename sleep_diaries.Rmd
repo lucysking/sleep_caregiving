@@ -1,0 +1,114 @@
+---
+title: "Wrangle Sleep Diary"
+author: "Lucy King"
+date: "7/23/2018"
+output: html_document
+---
+
+```{r}
+#Libraries
+library(tidyverse)
+library(lubridate)
+
+
+#Parameters
+sleep_diary_file <- "~/Desktop/BABIES/manber_sleep/data/Postpartum Sleep diaries/POSTPARTUM DIARIES.sav"
+
+freeplay_date_file <- "~/Desktop/BABIES/manber_sleep/data/freeplay_date.csv"
+```
+
+##Read in long-form data
+Select only data surrounding 18 weeks postpartum: to select, merge date of free play, and include rows +/- 2 weeks from date of free play
+
+```{r}
+sleep_diary <-
+  haven::read_sav(sleep_diary_file) %>% 
+      mutate(
+        ID = as.integer(ID)
+      ) %>% 
+  left_join(read_csv(freeplay_date_file), by = "ID") %>% 
+  mutate(
+    date_fp = parse_date(date_fp, format = "%m/%d/%y"),
+    date_fp_plus2weeks = date_fp + weeks(2),
+    date_fp_minus2weeks = date_fp - weeks(2)
+  ) %>% 
+  filter(
+    DIARY_DATE <= date_fp_plus2weeks & DIARY_DATE >= date_fp_minus2weeks 
+  ) %>% 
+  select(
+    -date_fp_plus2weeks:-date_fp_minus2weeks
+  )
+```
+
+##Descriptives on number of sleep diaries completed
+```{r}
+sleep_diary %>% 
+  group_by(ID) %>% 
+  count()
+
+sleep_diary %>% 
+  group_by(ID) %>% 
+  count() %>% 
+  ungroup() %>% 
+  summarise(
+    mean_n = mean(n, na.rm = TRUE),
+    median_n = median(n, na.rm = TRUE),
+    sd_n = sd(n, na.rm = TRUE),
+    min_n = min(n, na.rm = TRUE),
+    max_n = max(n, na.rm = TRUE)
+  )
+
+sleep_diary %>% 
+  group_by(ID) %>% 
+  count() %>% 
+  ggplot(aes(n)) +
+  geom_histogram(binwidth = 1)
+```
+
+##Calculate averages
+```{r}
+sleep_diary_wf <- 
+  sleep_diary %>% 
+  group_by(ID) %>% 
+  summarise_all(
+    funs(mean), na.rm = TRUE
+  ) %>% 
+  left_join(
+    sleep_diary %>% 
+      group_by(ID) %>% 
+      count(),
+    by = "ID"
+  ) %>% 
+  mutate(
+    sleep_time_sd = TST_hr + (TST_min / 60)
+  ) %>% 
+  select(
+    ID,
+    sleep_time_sd,
+    wake_time_sd = WASO_min_infant,
+    wake_bouts_sd = WASO_num_infant,
+    quality_sd = Quality,
+    n_days_sd = n,
+    date_fp
+  )
+
+```
+
+## Visualize distributions
+```{r}
+sleep_diary_wf %>% 
+  ggplot(aes(quality_sd)) +
+  geom_histogram()
+```
+
+
+```{r}
+sleep_diary_wf %>% 
+  ggplot(aes(wake_time_sd)) +
+  geom_histogram()
+
+sleep_diary_wf %>% 
+  ggplot(aes(wake_bouts_sd)) +
+  geom_histogram()
+```
+

@@ -8,131 +8,126 @@ output: html_notebook
 ##Libraries
 library(lubridate)
 library(tidyverse)
+library(ggcorrplot)
 
 ##Parameters
 
-#summary maternal actigraphy scores 
-maternal_actigraphy_summary_file <- "~/Desktop/BABIES/manber_sleep/data/Actigraphy Export File_maternal_caregiving_02.21.18_SLEEPSUM.csv"
+#maternal actigraphy scores 
+maternal_actigraphy_file <- "~/Desktop/BABIES/manber_sleep/data/final_actigraphy_20180815.xlsx"
 
-#daily maternal actigraphy scores
-
-maternal_actigraphy_daily_file <- "~/Desktop/BABIES/manber_sleep/data/Actigraphy Export File_maternal_caregiving_02.21.18_SLEEPSUM.csv"
-
-#load file with free play date
 freeplay_date_file <- "~/Desktop/BABIES/manber_sleep/data/freeplay_date.csv"
 ```
 
-###Wrangle summary scores
-```{r summary}
-maternal_actigraphy_summary <- read_csv(maternal_actigraphy_summary_file)
+# Wrangle actigraphy scores
 
-maternal_actigraphy_summary <-
-  maternal_actigraphy_summary %>% 
-  gather(key1, value, duration:avg_sleep_b) %>% 
-  unite(key2, interval_number, key1, sep = "_") %>% 
-  spread(key2, value) 
-```
-
-##Wrangle nightly scores
-```{r nightly}
-#reformat dates using lubridate
-mact$start_date <- mdy(mact$start_date)
-fp_date$fp_date <- mdy(fp_date$date_fp)
-#merge with free play date file
-mact <- merge(mact, fp_date, by ="ID", all = T)
-
-#match free play date
-mact$night_bf <- mact$fp_date - days(1) #date of night before is free play date - 1 day
-mact$night_bf2 <- ifelse(mact$night_bf == mact$start_date, 1, 0)
-mact$night_aft <- ifelse(mact$fp_date == mact$start_date, 1, 0) #night after is the same date as the free play
-
-mact_bf <- subset(mact, night_bf2 == 1) #data from the night before the free play
-mact_bf <- mact_bf %>%
-  group_by(ID) %>%
-  summarise(
-    wake_time = sum(wake_time),
-    sleep_time = sum(sleep_time)
-  )
-mact_bf <- rename(mact_bf, wake_timebf = wake_time)
-mact_bf <- rename(mact_bf, sleep_timebf = sleep_time)
-
-mact_aft <- subset(mact, night_aft == 1) #data from the night after the free play
-mact_aft <- mact_aft %>%
-  group_by(ID) %>%
-  summarise(
-    wake_time = sum(wake_time),
-    sleep_time = sum(sleep_time)
-  )
-
-mact_aft <- rename(mact_aft, wake_timeaf = wake_time)
-mact_aft <- rename(mact_aft, sleep_timeaf = sleep_time)
-
-mact_fp <- merge(mact_bf, mact_aft, by = "ID", all = T)
-mact_fp <- mact_fp %>%
+Select only data surrounding 18 weeks postpartum: to select, merge date of free play, and include rows +/- 2 weeks from date of free play
+```{r summary, warning=FALSE}
+actigraphy <-
+  readxl::read_xlsx(
+    maternal_actigraphy_file,
+    skip = 1
+    ) %>% 
+  slice(-1) %>% 
+  filter(`Interval Type` == "SLEEP") %>% 
   select(
-    ID, 
-    wake_timebf,
-    sleep_timebf,
-    wake_timeaf,
-    sleep_timeaf
+    ID = `Subject ID`,
+    start_date = `Data Start Date`,
+    interval = `Interval#`,
+    wake_time = `Wake Time`, #same as WASO for us because interval = 1 minute
+    wake_bouts = `#Wake Bouts`,
+    sleep_time = `Sleep Time`
+  ) %>% 
+  mutate(
+    ID = str_replace(ID, "_3|_A", "")
+  ) %>% 
+  mutate_at(
+    vars(ID, interval, wake_time:sleep_time),
+    as.numeric
+  ) %>% 
+  left_join(
+    read_csv(freeplay_date_file), 
+    by = "ID"
+  ) %>% 
+  mutate(
+    date_fp = parse_date(date_fp, format = "%m/%d/%y"),
+    date_fp_plus2weeks = date_fp + weeks(2),
+    date_fp_minus2weeks = date_fp - weeks(2)
+  ) %>% 
+  filter(
+    start_date <= date_fp_plus2weeks & start_date >= date_fp_minus2weeks 
+  ) %>% 
+  select(
+    -date_fp_plus2weeks:-date_fp_minus2weeks
   )
-```
 
-###Distributions of summary scores
-```{r summary_plot}
-ggplot(mact_SUM, aes(x = n_nights)) + 
-  geom_histogram(bins = 30, position = "dodge", fill= "gray", color = "black") +
-  theme_bw() 
-
-ggplot(mact_SUM, aes(x = av_waketime)) + 
-  geom_histogram(bins = 30, position = "dodge", fill= "gray", color = "black") +
-  theme_bw() 
-
-#square root transformed
-ggplot(mact_SUM, aes(x = sqrt(av_waketime))) + 
-  geom_histogram(bins = 30, position = "dodge", fill= "gray", color = "black") +
-  theme_bw() 
-
-ggplot(mact_SUM, aes(x = av_sleeptime)) + 
-  geom_histogram(bins = 30, position = "dodge", fill= "gray", color = "black") +
-  theme_bw() 
 ```
 
 ###Distributions of daily scores
-```{r daily_plot}
-#night before free play
-ggplot(mact_fp, aes(x = sleep_timebf)) + 
-  geom_histogram(bins = 30, position = "dodge", fill= "gray", color = "black") +
-  theme_bw() 
+```{r}
+ggplot(actigraphy, aes(x = wake_time)) +
+  geom_histogram(bins = 30, position = "dodge", fill = "gray", color = "black") +
+  theme_bw()
 
-ggplot(mact_fp, aes(x = wake_timebf)) + 
-  geom_histogram(bins = 30, position = "dodge", fill= "gray", color = "black") +
-  theme_bw() 
+ggplot(actigraphy, aes(x = wake_bouts)) +
+  geom_histogram(bins = 30, position = "dodge", fill = "gray", color = "black") +
+  theme_bw()
 
-#sqrt transformed
-ggplot(mact_fp, aes(x = sqrt(wake_timebf))) + 
-  geom_histogram(bins = 30, position = "dodge", fill= "gray", color = "black") +
-  theme_bw() 
-
-#night after free play
-ggplot(mact_fp, aes(x = sleep_timeaf)) + 
-  geom_histogram(bins = 30, position = "dodge", fill= "gray", color = "black") +
-  theme_bw() 
-
-ggplot(mact_fp, aes(x = wake_timeaf)) + 
-  geom_histogram(bins = 30, position = "dodge", fill= "gray", color = "black") +
-  theme_bw() 
-
-#sqrt transformed
-ggplot(mact_fp, aes(x = sqrt(wake_timeaf))) + 
-  geom_histogram(bins = 30, position = "dodge", fill= "gray", color = "black") +
-  theme_bw() 
+ggplot(actigraphy, aes(x = sleep_time)) +
+  geom_histogram(bins = 30, position = "dodge", fill = "gray", color = "black") +
+  theme_bw()
 ```
 
-##Correlations across measures
+##Create wide-form version
 ```{r}
-mact_all <- merge(mact_SUM, mact_fp, by = "ID", all = T)
-corr_mact <- cor(mact_all, use = "pairwise.complete.obs")
-corrplot(corr_mact, order = "hclust", tl.col='black', tl.cex=.75)
+actigraphy_wf <-
+  actigraphy %>% 
+  group_by(ID) %>% 
+  summarise(
+    n_days_ac = n(),
+    wake_time_ac = mean(wake_time, na.rm = TRUE),
+    wake_bouts_ac = mean(wake_bouts, na.rm = TRUE),
+    sleep_time_ac = mean(sleep_time, na.rm = TRUE)
+  ) 
+```
+
+
+##Distributions of summary scores
+```{r summary_plot}
+ggplot(actigraphy_wf, aes(x = n_days_ac)) +
+  geom_histogram(bins = 30, position = "dodge", fill = "gray", color = "black") +
+  theme_bw()
+
+ggplot(actigraphy_wf, aes(x = wake_time_ac)) +
+  geom_histogram(bins = 30, position = "dodge", fill = "gray", color = "black") +
+  theme_bw()
+
+ggplot(actigraphy_wf, aes(x = wake_bouts_ac)) +
+  geom_histogram(bins = 30, position = "dodge", fill = "gray", color = "black") +
+  theme_bw()
+
+ggplot(actigraphy_wf, aes(x = sleep_time_ac)) +
+  geom_histogram(bins = 30, position = "dodge", fill = "gray", color = "black") +
+  theme_bw()
+```
+##Descriptives of summary scores
+```{r}
+actigraphy_wf %>% 
+  summarise_at(
+    vars(wake_time_ac, wake_bouts_ac, sleep_time_ac, n_days_ac),
+    funs(mean, sd), na.rm = TRUE
+  )
+
+actigraphy_wf %>% 
+  group_by(!is.na(wake_time_ac)) %>% 
+  count()
+
+actigraphy_wf %>% 
+  group_by(!is.na(wake_bouts_ac)) %>% 
+  count()
+
+actigraphy_wf %>% 
+  group_by(!is.na(sleep_time_ac)) %>% 
+  count()
+
 ```
 

@@ -1,0 +1,91 @@
+---
+title: "Score Sleep Questionnaires"
+author: "Lucy King"
+output: html_document
+---
+
+```{r}
+#Libraries
+library(tidyverse)
+
+#Parameters
+questionnaires_file <- "~/Desktop/BABIES/manber_sleep/data/T3 questionnaires.csv"
+```
+
+# Read in data 
+```{r}
+questionnaires <-
+  read_csv(questionnaires_file)
+```
+
+##Reliability of ISI and EPDS
+```{r}
+ISI <-
+  questionnaires %>% 
+  select(ISI_T3_1_ISI_T3_1a:ISI_T3_5)
+
+psych::alpha(ISI)
+
+EPDS <-
+  questionnaires %>% 
+  select(EPDS_T3_1:EPDS_T3_10)
+
+psych::alpha(EPDS)
+```
+
+##Score questionnaires
+
+```{r}
+questionnaires <-
+  questionnaires %>% 
+  group_by(ID) %>% 
+  mutate(
+    ISI_total = sum(#insomnia severity index
+      c(
+        ISI_T3_1_ISI_T3_1a,
+        ISI_T3_1_ISI_T3_1b, 
+        ISI_T3_1_ISI_T3_1c,
+        ISI_T3_2,
+        ISI_T3_3,
+        ISI_T3_4,
+        ISI_T3_5
+      ), 
+      na.rm = TRUE
+    ), 
+    EPDS_total = sum(
+      c(
+        EPDS_T3_1,
+        EPDS_T3_2,
+        EPDS_T3_3,
+        EPDS_T3_4,
+        EPDS_T3_5,
+        EPDS_T3_6,
+        EPDS_T3_7,
+        EPDS_T3_8,
+        EPDS_T3_9,
+        EPDS_T3_10
+      ),
+      na.rm = TRUE
+    ) 
+  )  %>% 
+  select(
+    ID,
+    ISI_total,
+    EPDS_total
+  ) %>% 
+  ungroup()
+
+```
+
+```{r}
+ggplot(questionnaires, aes(x = ISI_total)) +
+  geom_histogram(bins = 30, position = "dodge", fill = "gray", color = "black") +
+  theme_bw()
+
+ggplot(questionnaires, aes(x = EPDS_total)) +
+  geom_histogram(bins = 30, position = "dodge", fill = "gray", color = "black") +
+  theme_bw()
+
+```
+
+

@@ -1,6 +1,0 @@
-"0","```r
-#sqrt transformed
-ggplot(mact_fp, aes(x = sqrt(wake_timeaf))) + 
-  geom_histogram(bins = 30, position = \"dodge\", fill= \"gray\", color = \"black\") +
-  theme_bw() 
-```"

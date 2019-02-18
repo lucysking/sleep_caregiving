@@ -1,5 +1,0 @@
-"0","free_play_fa <-"
-"0","  free_play_fa %>% "
-"0","  arrange(ID) %>% "
-"0","  bind_cols(as.tibble(EFA$scores))"
-"0","  "

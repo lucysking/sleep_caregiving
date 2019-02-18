@@ -1,6 +1,14 @@
 {
-    "path" : "~/Desktop/BABIES/manber_sleep/sleep_caregiving",
+    "path" : "~/Desktop/BABIES/r01_winter_2019",
     "sortOrder" : [
+        {
+            "ascending" : false,
+            "columnIndex" : 4
+        },
+        {
+            "ascending" : false,
+            "columnIndex" : 3
+        },
         {
             "ascending" : true,
             "columnIndex" : 2

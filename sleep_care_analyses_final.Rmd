@@ -1,0 +1,1067 @@
+---
+title: "Analyze Associations between Sleep and Caregiving"
+output: html_notebook
+---
+
+##Load data
+```{r load_data}
+##Libraries
+library(tidyverse)
+library(lme4)
+library(lmerTest)
+library(jtools)
+library(nlme)
+library(corrr)
+library(sjstats)
+library(psych)
+
+##Parameters
+
+#files_________________________________________________________________
+intervention_file <- "~/Desktop/BABIES/manber_sleep/data/ID and Tx Arm.csv"
+
+demographics_file <- "~/Desktop/BABIES/manber_sleep/data/Demographics_02.15.18.xlsx"
+
+infant_age_file <- "~/Desktop/BABIES/manber_sleep/data/ID and Delivery_Day.xlsx"
+```
+
+# Read in data: wide format
+```{r}
+data_wf <-
+  free_play_wf %>% 
+  left_join(
+    read_csv(intervention_file) %>% 
+      mutate(
+        ID = as.numeric(ID),
+        Condition = if_else(
+          Condition == "ABTi",
+          "ABTI", Condition
+        )
+      ),
+    by = "ID"
+  ) %>%  
+  left_join(questionnaires, by = "ID") %>% 
+  left_join(actigraphy_wf, by = "ID") %>% 
+  left_join(
+    readxl::read_xlsx(demographics_file, sheet = "Demographics_02.15.18") %>% 
+      select(
+        ID,
+        site = SITE,
+        mom_dob = DOB,
+        latino = Eth_latino,
+        race = Race,
+        education = Education,
+        income = Income
+      ),
+    by = "ID"
+  ) %>% 
+  left_join(sleep_diary_wf, by = "ID")  %>% 
+  left_join(
+    readxl::read_xlsx(
+      infant_age_file, 
+      sheet = "Sheet1"
+      ),
+    by = "ID"
+  ) %>% 
+  mutate(
+    mom_age = (mom_dob %--% date_fp) / years(1),
+    baby_age = (Delivery_Day %--% date_fp) / months(1)
+  ) %>% 
+  select(-Delivery_Day, -mom_dob)
+
+
+```
+
+# Read in data: long format
+```{r}
+data_lf <-
+  free_play_lf %>% 
+  filter(Episode != 6) %>% 
+  left_join(
+    read_csv(intervention_file) %>% 
+      mutate(
+        ID = as.numeric(ID),
+        Condition = if_else(
+          Condition == "ABTi",
+          "ABTI", Condition
+        )
+      ),
+    by = "ID"
+  ) %>% 
+  left_join(questionnaires, by = "ID") %>% 
+  left_join(actigraphy_wf, by = "ID") %>% 
+  left_join(
+    readxl::read_xlsx(demographics_file, sheet = "Demographics_02.15.18") %>% 
+      select(
+        ID,
+        site = SITE,
+        mom_dob = DOB,
+        latino = Eth_latino,
+        race = Race,
+        education = Education,
+        income = Income
+      ),
+    by = "ID"
+  ) %>% 
+  left_join(sleep_diary_wf, by = "ID") %>%
+  mutate(
+    episode_re = as.integer(
+      recode(
+        Episode,
+        "1" = "0",
+        "2" = "1",
+        "3" = "2",
+        "4" = "3",
+        "5" = "4"
+      )
+    ),
+    mom_age = (mom_dob %--% date_fp) / years(1)
+  )
+
+```
+
+# Descriptives
+## Ns
+```{r}
+data_wf %>% 
+  count(!is.na(sens_M), !is.na(wake_time_ac)) %>% 
+  mutate(
+    per = n / sum(n)
+  )
+
+data_wf %>% 
+  count(!is.na(sens_M), !is.na(wake_time_sd)) %>% 
+  mutate(
+    per = n / sum(n)
+  )
+
+data_wf %>% 
+  count(!is.na(sens_M), !is.na(sleep_time_sd)) %>% 
+  mutate(
+    per = n / sum(n)
+  )
+  
+data_wf %>% 
+  count(!is.na(sens_M), !is.na(ISI_total)) %>% 
+  mutate(
+    per = n / sum(n)
+  )
+
+data_wf %>% 
+  count(!is.na(sens_M), !is.na(EPDS_total)) %>% 
+  mutate(
+    per = n / sum(n)
+  )
+
+data_wf %>% 
+  filter(!is.na(sens_M)) %>% 
+  count(site)
+
+semi_join(actigraphy_wf, sleep_diary_wf) %>% count()
+```
+
+## Demographics
+```{r}
+data_wf %>% 
+  count(Condition)
+
+##age
+data_wf %>% 
+  summarise_at(
+    vars(mom_age, baby_age),
+    funs(mean, sd, min, max), na.rm = TRUE
+  )
+
+data_wf %>% 
+  group_by(Condition) %>% 
+  summarise_at(
+    vars(mom_age),
+    funs(mean, sd), na.rm = TRUE
+  )
+
+
+##education
+data_wf %>% 
+  count(education) %>% 
+  mutate(
+    per = n / sum(n)
+  )
+
+data_wf %>% 
+  group_by(Condition) %>% 
+  count(education) %>% 
+  mutate(
+    per = n / sum(n)
+  )
+
+data_wf %>% 
+  summarise(
+    median(education) #7 = Graduate or professional degree
+  )
+
+##income
+data_wf %>% 
+  count(income) %>% 
+  mutate(
+    per = n / sum(n)
+  )
+
+data_wf %>% 
+  group_by(Condition) %>% 
+  count(income) %>% 
+  mutate(
+    per = n / sum(n)
+  )
+
+data_wf %>% 
+  filter(income != "6") %>% 
+  summarise(
+    median(income) #5 = $100,000 or More 
+  )
+
+##ethnicity
+data_wf %>% 
+  count(latino) %>% 
+  mutate(
+    per = n / sum(n)
+  )
+
+data_wf %>% 
+  group_by(Condition) %>% 
+  count(latino) %>% 
+  mutate(
+    per = n / sum(n)
+  )
+
+#race
+data_wf %>% 
+  count(race) %>% 
+  mutate(
+    per = n / sum(n)
+  )
+
+data_wf %>% 
+  group_by(Condition) %>% 
+  count(race) %>% 
+  mutate(
+    per = n / sum(n)
+  )
+```
+
+## Sleep and symptom measures
+
+```{r}
+#overall
+data_wf %>% 
+  summarise_at(
+    vars(
+      n_days_ac,
+      n_days_sd,
+      wake_time_ac, 
+      wake_bouts_ac, 
+      sleep_time_ac, 
+      wake_time_sd,
+      wake_bouts_sd,
+      sleep_time_sd,
+      quality_sd,
+      ISI_total, 
+      EPDS_total
+      ),
+    funs(mean, sd, min, max), na.rm = TRUE
+  )
+
+#by intervention condition
+data_wf %>% 
+  group_by(Condition) %>% 
+  summarise_at(
+    vars(
+      n_days_ac,
+      n_days_sd,
+      wake_time_ac, 
+      wake_bouts_ac, 
+      sleep_time_ac, 
+      wake_time_sd,
+      wake_bouts_sd,
+      sleep_time_sd,
+      quality_sd,
+      ISI_total, 
+      EPDS_total
+      ),
+    funs(mean, sd, min, max), na.rm = TRUE
+  )
+```
+
+```{r}
+#number of days of actigraphy
+data_wf %>% 
+  count(n_days_ac) %>% 
+  arrange(desc(n_days_ac))
+
+corr_sd_days <- 
+  data_wf %>%
+  select(
+    n_days_sd,
+    wake_time_sd,
+    wake_bouts_sd,
+    sleep_time_sd,
+    quality_sd
+  ) %>% 
+  correlate(use = "complete.obs", method = "pearson") %>% 
+  fashion()
+corr_sd_days
+
+corr_ac_days <- 
+  data_wf %>%
+  select(
+    n_days_ac,
+    wake_time_ac,
+    wake_bouts_ac,
+    sleep_time_ac
+  ) %>% 
+  correlate(use = "complete.obs", method = "pearson") %>% 
+  fashion()
+corr_ac_days
+```
+
+# Create income variable removing "Don't know" responses
+```{r}
+data_wf <- 
+  data_wf %>% 
+  mutate(
+    income_clean = if_else(income == 6, NA_real_, income)
+  )
+
+data_lf <- 
+  data_lf %>% 
+  mutate(
+    income_clean = if_else(income == 6, NA_real_, income)
+  )
+```
+
+## Dimensionality Reduction
+
+### Correlations among sleep measures
+```{r}
+corr_sleep_matrix <- 
+  data_wf %>%
+  select(
+    wake_time_ac,
+    wake_bouts_ac,
+    sleep_time_ac,
+    wake_time_sd,
+    wake_bouts_sd,
+    sleep_time_sd,
+    quality_sd
+  ) %>% 
+  correlate(use = "complete.obs", method = "pearson") %>% 
+  fashion()
+corr_sleep_matrix <- corr_sleep_matrix
+```
+
+```{r}
+corr_sleep_plot <- 
+  data_wf %>%
+  select(
+    `Objective WASO` = wake_time_ac,
+    `Objective arousals` = wake_bouts_ac,
+    `Objective TST` = sleep_time_ac,
+    `Subjective WASO` = wake_time_sd,
+    `Subjective awakenings` = wake_bouts_sd,
+    `Subjective TST` = sleep_time_sd,
+    `Perceived quality` = quality_sd
+  ) %>% 
+  cor(use = "complete.obs", method = "pearson")
+
+ggcorrplot(corr_sleep_plot)
+```
+
+```{r}
+#actigraphy with actigraphy
+cor.test(data_wf$wake_time_ac, data_wf$wake_bouts_ac)
+cor.test(data_wf$wake_time_ac, data_wf$sleep_time_ac)
+cor.test(data_wf$wake_bouts_ac, data_wf$sleep_time_ac)
+
+#subjective with subjective
+cor.test(data_wf$wake_time_sd, data_wf$wake_bouts_sd)
+cor.test(data_wf$wake_time_sd, data_wf$sleep_time_sd)
+cor.test(data_wf$wake_time_sd, data_wf$quality_sd)
+
+#actigraphy with subjective
+cor.test(data_wf$wake_time_ac, data_wf$wake_time_sd)
+cor.test(data_wf$wake_bouts_ac, data_wf$wake_bouts_sd)
+cor.test(data_wf$sleep_time_ac, data_wf$sleep_time_sd)
+cor.test(data_wf$sleep_time_ac, data_wf$wake_time_sd)
+cor.test(data_wf$sleep_time_ac, data_wf$wake_bouts_sd)
+cor.test(data_wf$sleep_time_ac, data_wf$quality_sd)
+```
+
+### EFA of sleep measures
+
+```{r}
+data_sleep_efa <-
+  data_wf %>% 
+  dplyr::select(
+    wake_time_ac,
+    wake_bouts_ac,
+    sleep_time_ac,
+    wake_time_sd,
+    wake_bouts_sd,
+    sleep_time_sd,
+    quality_sd
+  )
+
+```
+
+#### Check factorability
+Barlett's test: Compare correlation matrix to identify matrix (no correlation matrix). Null is that there is no difference between the matrices. 
+```{r}
+cortest.bartlett(corr_sleep_plot)
+```
+
+```{r}
+VSS.scree(data_sleep_efa)
+```
+
+I will use the minimum residual method to extract the factors. This is the default method in fa() and minimizes the residual matrix (the difference between the original correlation matrix and the matrix of the extracted factors). I will use varimax rotation to impose orthogonality of the factors and improve intepretability. I am imputing missing values with the mean. 
+
+#### 2-factor EFA
+```{r}
+EFA_sleep_2 <-
+  fa(
+  data_sleep_efa, 
+  nfactors = 2,
+  cor = "cor",
+  rotate = "varimax",
+  missing = TRUE,
+  impute = "mean",
+  fm = "minres"
+)
+
+EFA_sleep_2
+EFA_sleep_2$loadings
+
+EFA_sleep_2$Vaccounted[3,2]
+```
+
+Dropping sleep_time_ac because of weak loadings.
+```{r}
+data_sleep_efa_final <-
+  data_wf %>% 
+  dplyr::select(
+    wake_time_ac,
+    wake_bouts_ac,
+    wake_time_sd,
+    wake_bouts_sd,
+    sleep_time_sd,
+    quality_sd
+  )
+```
+
+```{r}
+EFA_sleep_2_final <-
+  fa(
+  data_sleep_efa_final, 
+  nfactors = 2,
+  cor = "cor",
+  rotate = "varimax",
+  missing = TRUE,
+  impute = "mean",
+  fm = "minres"
+)
+
+EFA_sleep_2_final
+EFA_sleep_2_final$loadings
+
+EFA_sleep_2_final$Vaccounted[3,2]
+```
+
+Collectively explain 59% of the variance. 
+
+F1 = sleep_time_sd and quality_sd, -wake_time_sd, -wake_bouts_sd
+F2 = wake_time_ac, wake_bouts_ac
+
+#### Heatmap of 2-factor solution
+
+```{r}
+factor_names = c(
+  "Factor 1:\nSubjective sleep disturbance", 
+  "Factor 2:\nObjective sleep continuity"
+  )
+
+loadings <-
+  EFA_sleep_2$loadings[] %>% 
+  data.frame() %>% 
+  rownames_to_column("measure") %>% 
+  gather(factor, loading, -measure) %>%  
+  mutate(factor = as.character(factor(factor, labels = factor_names))) 
+  
+
+# get fa.sort() order
+order <- 
+  loadings %>%
+  group_by(measure) %>%
+  top_n(1, abs(loading)) %>%
+  ungroup() %>%
+  arrange(desc(factor), abs(loading)) %>%
+  mutate(order = 1:length(levels(factor(loadings$measure)))) %>%
+  select(measure, order)
+  
+# get percent shared variance explained
+shared_var <- EFA_sleep_2$Vaccounted %>%
+  data.frame() %>%
+  rownames_to_column("stat") %>%
+  filter(stat == "Proportion Var") %>%
+  select(-stat) %>%
+  gather(factor, var) %>%
+  mutate(factor = as.character(factor(factor, labels = factor_names))) %>%
+  mutate(var = paste0(factor, "\n(", round(var, 2)*100, "% var.)"))
+
+  # make plot
+loadings_plot_data <- 
+  loadings %>% 
+  left_join(order, by = "measure") %>%
+  left_join(shared_var, by = "factor") %>%
+  mutate(
+    measure = recode(
+    measure,
+    "sleep_time_sd" = "Subjective TST",
+    "wake_time_sd" = "Subjective WASO",
+    "quality_sd" = "Perceived quality",
+    "wake_bouts_sd" = "Subjective awakenings",
+    "wake_time_ac" = "Objective WASO",
+    "wake_bouts_ac" = "Objective arousals"
+    )
+  ) 
+
+loadings_plot_data %>% 
+  ggplot(
+    aes(
+      x = var, 
+      y = reorder(measure, order), 
+      fill = loading,
+      label = round(loading, 2)
+    )
+  ) +
+  geom_tile(color = "black") +
+  geom_text(size = 7, color = "black") +
+  scale_fill_distiller(
+    limits = c(-1, 1), 
+    palette = "RdYlBu",
+    guide = guide_colorbar(barheight = 20)
+  ) +
+  scale_x_discrete(position = "top") +
+  theme_minimal() +
+  theme(
+    legend.title = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    axis.title = element_blank(), 
+    axis.text.y = element_text(size = 18),
+    axis.text.x = element_text(size = 17)
+  )
+
+ggsave("~/Desktop/BABIES/manber_sleep/loadings_plot.png", height = 7, width = 10.5)
+```
+
+#### Compute sum scores for each factor
+```{r}
+data_wf <-
+  data_wf %>% 
+  mutate(
+    sleep_disturbed_sd = scale(
+      ((scale(wake_time_sd, scale = TRUE) + scale(wake_bouts_sd, scale = TRUE)) -
+         (scale(sleep_time_sd, scale = TRUE) + scale(quality_sd, scale = TRUE))),
+      scale = TRUE
+    ), sleep_continuity_ac = scale(
+      (scale(wake_time_ac, scale = TRUE) + scale(wake_bouts_ac, scale = TRUE)),
+      scale = TRUE
+    ) * -1
+  )
+
+data_wf %>% 
+  ggplot(aes(sleep_disturbed_sd)) +
+  geom_histogram()
+
+data_wf %>% 
+  ggplot(aes(sleep_continuity_ac)) +
+  geom_histogram()
+
+```
+
+## Trajectories of caregiving across the Free Play
+
+##Recode variable for modeling
+```{r}
+data_lf <-
+  data_lf %>% 
+  left_join(
+    data_wf %>% 
+      select(ID, sleep_continuity_ac, sleep_disturbed_sd),
+    by = "ID"
+  ) %>% 
+  mutate(
+    Condition = as.factor(Condition),
+    site = as.factor(site),
+    episode_re_cent = scale(episode_re, scale = FALSE),
+    wake_time_ac_cent = scale(wake_time_ac, scale = FALSE),
+    isi_cent = scale(ISI_total, scale = FALSE),
+    sleep_time_ac_cent = scale(sleep_time_ac, scale = FALSE),
+    continuity_ac_hi = sleep_continuity_ac - sd(sleep_continuity_ac, na.rm = TRUE),
+    continuity_ac_lo = sleep_continuity_ac + sd(sleep_continuity_ac, na.rm = TRUE),
+    negmood_cent = scale(negmood_fin, scale = FALSE),
+    epds_cent = scale(EPDS_total, scale = FALSE),
+    mom_age_cent = scale(mom_age, scale = FALSE),
+    income_grp = as.factor(
+      case_when(
+        income == 6 ~ NA_character_,
+        income < 5 ~ "lower",
+        income == 5 ~ "higher"
+      )
+    ),
+    site = case_when(
+      site == "CR" ~ -.5,
+      site == "SH" ~ 0,
+      site == "VM" ~ .5
+    )
+  )
+
+contrasts(data_lf$Condition) = c(-1, 1)
+contrasts(data_lf$income_grp) = c(-1, 1)
+```
+
+##Primary analyses
+```{r}
+ml_base <- lmer(
+  sens_fin ~ 
+    episode_re + 
+    Condition + 
+    site + 
+    (1|ID), 
+  REML = FALSE,
+  data = data_lf
+  )
+
+summary(ml_base)
+```
+
+### subjective sleep disturbance
+```{r}
+ml_SD <- lmer(
+  sens_fin ~ 
+    episode_re * sleep_disturbed_sd + 
+    Condition + 
+    site + 
+    (1|ID), 
+  REML = FALSE,
+  data = data_lf
+  )
+
+summary(ml_SD)
+std_beta(ml_SD)
+```
+
+### objective sleep continuity
+```{r}
+ml_SC <- lmer(
+  sens_fin ~ 
+    episode_re * sleep_continuity_ac + 
+    Condition + 
+    site + 
+    (1|ID), 
+  REML = FALSE,
+  data = data_lf
+  )
+
+summary(ml_SC)
+std_beta(ml_SC)
+```
+
+#### objective sleep contunuity: simple slopes
+```{r}
+ml_SC_lo <- lmer(
+  sens_fin ~ 
+    episode_re * continuity_ac_lo + 
+    Condition + 
+    site + 
+    (1|ID), 
+  REML = FALSE,
+  data = data_lf
+  )
+
+summary(ml_SC_lo)
+std_beta(ml_SC_lo)
+```
+
+```{r}
+ml_SC_hi <- lmer(
+  sens_fin ~ 
+    episode_re * continuity_ac_hi + 
+    Condition + 
+    site + 
+    (1|ID), 
+  REML = FALSE,
+  data = data_lf
+  )
+
+summary(ml_SC_hi)
+std_beta(ml_SC_hi)
+```
+
+#### objective sleep continuity: visualize
+
+```{r}
+##Extract intercepts and sloepes from models 
+ml_SC_summary <- summary(ml_SC)
+ml_SC_intercept <- ml_SC_summary$coefficients[1]
+ml_SC_slope <- ml_SC_summary$coefficients[2]
+
+ml_SC_lo_summary <- summary(ml_SC_lo)
+ml_SC_lo_intercept <- ml_SC_lo_summary$coefficients[1]
+ml_SC_lo_slope <- ml_SC_lo_summary$coefficients[2]
+
+ml_SC_hi_summary <- summary(ml_SC_hi)
+ml_SC_hi_intercept <- ml_SC_hi_summary$coefficients[1]
+ml_SC_hi_slope <- ml_SC_hi_summary$coefficients[2]
+
+simple_slopes_SC <- 
+  tribble(
+    ~effect, ~intercept, ~slope,
+    "X Lower", ml_SC_lo_intercept, ml_SC_lo_slope,
+    "Y Medium", ml_SC_intercept, ml_SC_slope,
+    "Z Higher", ml_SC_hi_intercept, ml_SC_hi_slope
+  )
+```
+
+```{r}
+data_lf %>%   
+  ggplot(aes(episode_re, sens_fin)) +
+  geom_jitter(alpha = 1/11, size = .0001) + 
+  theme(
+    legend.position = "none"
+  ) +
+  geom_abline(
+    data = simple_slopes_SC,
+    aes(intercept = intercept, slope = slope, color = fct_rev(effect)),
+    size = 5
+  ) +
+  scale_x_continuous(
+    breaks = c(0, 1, 2, 3, 4),
+    labels = c(2, 4, 6, 8, 10)
+  ) +
+  scale_y_continuous(
+    breaks = seq.int(1, 6, 1)
+  ) +
+  scale_color_manual(
+    labels = c("+1SD (better)", "Mean", "-1SD (poorer)"),
+    values = c("indianred1", "darkgrey", " darkslategray1")
+  ) +
+  theme_minimal() +
+  theme(
+    #legend.position = "bottom",
+    legend.text = element_text(size = 30),
+    legend.title = element_text(size = 32),
+    axis.title = element_text(size = 32),
+    axis.text = element_text(size = 22),
+    legend.key.size = unit(3, 'lines')
+  ) +
+  labs(
+    color = "Objective\nsleep continuity",
+    x = "Free play interval (minutes)",
+    y = "Maternal sensitivity"
+  )
+
+ggsave("~/Desktop/BABIES/manber_sleep/manber_sleep_sync/plots/sens_continuity.png", width = 12, height = 10)
+
+
+```
+
+```{r}
+cor.test(data_wf$`1_sens_fin`, data_wf$sleep_continuity_ac)
+cor.test(data_wf$`2_sens_fin`, data_wf$sleep_continuity_ac)
+cor.test(data_wf$`3_sens_fin`, data_wf$sleep_continuity_ac)
+cor.test(data_wf$`4_sens_fin`, data_wf$sleep_continuity_ac)
+cor.test(data_wf$`5_sens_fin`, data_wf$sleep_continuity_ac)
+
+
+data_lf %>% 
+  mutate(
+    episode_factor = factor(
+      episode_re,
+      levels = c(0, 1, 2, 3, 4),
+      labels = c(
+        "0-2",
+        "2-4",
+        "4-6", 
+        "6-8",
+        "8-10"
+      )
+    )
+  ) %>% 
+  ggplot(aes(sleep_continuity_ac, sens_fin, color = episode_factor)) +
+  geom_jitter(
+    size = 6,
+    alpha = 1/2
+  ) +
+  geom_smooth(
+    method = "lm", 
+    se = FALSE,
+    size = 5,
+    alpha = 1/2
+  ) +
+  scale_x_continuous(
+    breaks = seq.int(-3, 3, .5)
+  ) +
+  scale_y_continuous(
+    breaks = seq.int(0, 6, 1)
+  ) +
+  scale_colour_viridis_d() +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_text(size = 30),
+    legend.text = element_text(size = 28),
+    axis.title = element_text(size = 30),
+    axis.text = element_text(size = 22)
+  ) +
+  labs(
+    color  = "Free play interval (minutes)",
+    x = "Objective sleep continuity",
+    y = "Maternal sensitivity"
+  )
+ggsave("~/Desktop/BABIES/manber_sleep/manber_sleep_sync/plots/sens_continuity_factor.png", width = 12, height = 10)
+```
+
+### Johnson-neyman wake time
+```{r}
+ml_WT <- lmer(
+  sens_fin ~ 
+    episode_re * wake_time_ac + 
+    Condition + 
+    site + 
+    (1|ID), 
+  REML = FALSE,
+  data = data_lf
+  )
+
+
+johnson_neyman(ml_WT, pred = episode_re, modx = wake_time_ac, control.fdr = TRUE)
+ggsave("~/Desktop/BABIES/manber_sleep/manber_sleep_sync/plots/johnson_neyman_wt.jpeg", width = 9, height = 7)
+
+data_wf %>% 
+  mutate(WT_group = wake_time_ac >= 52) %>% 
+  filter(!is.na(WT_group)) %>% 
+  count(WT_group) %>% 
+  mutate(per = n / sum(n))
+  
+```
+
+### Johnson-neyman wake bouts
+```{r}
+ml_WB <- lmer(
+  sens_fin ~ 
+    episode_re * wake_bouts_ac + 
+    Condition + 
+    site + 
+    (1|ID), 
+  REML = FALSE,
+  data = data_lf
+  )
+
+
+johnson_neyman(ml_WB, pred = episode_re, modx = wake_bouts_ac, control.fdr = TRUE)
+ggsave("~/Desktop/BABIES/manber_sleep/manber_sleep_sync/plots/johnson_neyman_wb.jpeg", width = 9, height = 7)
+
+data_wf %>% 
+  mutate(WB_group = wake_bouts_ac >= 17) %>% 
+  filter(!is.na(WB_group)) %>% 
+  count(WB_group) %>% 
+  mutate(per = n / sum(n))
+  
+```
+
+
+
+##Additional analyses
+
+###adjusting for depression symptoms and infant negative mood
+```{r}
+ml_SC_cov <- lmer(
+  sens_fin ~ 
+    episode_re * sleep_continuity_ac + 
+    Condition + 
+    site + 
+    episode_re * epds_cent +
+    episode_re * negmood_cent +
+    (1|ID), 
+  REML = FALSE,
+  data = data_lf
+  )
+
+summary(ml_SC_cov)
+#confint(ml_WT_cov)
+std_beta(ml_SC_cov)
+```
+
+###insomnia severity
+```{r}
+ml_ISI <- lmer(
+  sens_fin ~ 
+    episode_re * isi_cent + 
+    Condition + 
+    site + 
+    (1|ID), 
+  REML = FALSE,
+  data = data_lf
+  )
+
+summary(ml_ISI)
+std_beta(ml_ISI)
+
+glimpse(data_lf)
+```
+
+##Evaluate differences between final sample and those who did not complete the free play
+
+###Demographics
+```{r}
+demographics_all <- 
+  readxl::read_xlsx(demographics_file, sheet = "Demographics_02.15.18") %>% 
+  select(
+    ID,
+    site = SITE,
+    mom_dob = DOB,
+    latino = Eth_latino,
+    race = Race,
+    education = Education,
+    income = Income
+  ) %>% 
+  left_join(
+    free_play_wf %>% 
+      select(
+        ID,
+        sens_M
+      ),
+    by = "ID"
+  ) %>% 
+  mutate(
+    included = if_else(
+      !is.na(sens_M),
+      1, 0
+    ),
+    income_clean = if_else(income == 6, NA_real_, income)
+  ) 
+
+##site
+demographics_all %>% 
+  count(site, included) %>% 
+  mutate(
+    per = if_else(
+      included == 1, 
+      n / 67, n / 194
+    )
+  ) %>% 
+  arrange(included)
+    
+##ethnicity
+demographics_all %>% 
+  count(latino, included) %>% 
+  mutate(
+    per = if_else(
+      included == 1, 
+      n / 67, n / 127
+    )
+  ) %>% 
+  arrange(included)
+
+##race
+demographics_all %>% 
+  mutate(
+    white = if_else(
+      race == 1,
+      1, 0
+    )
+  ) %>% 
+  count(white, included) %>% 
+  mutate(
+    per = if_else(
+      included == 1, 
+      n / 67, n / 127
+    )
+  ) %>% 
+  arrange(included)
+
+
+##race and eth
+demographics_all %>% 
+  mutate(
+    white = if_else(
+      race == 1,
+      1, 0
+    )
+  ) %>% 
+  count(white, latino, included) %>% 
+  mutate(
+    per = if_else(
+      included == 1, 
+      n / 67, n / 127
+    )
+  ) %>% 
+  arrange(included)
+
+##income
+demographics_all %>% 
+  filter(!is.na(income_clean)) %>% 
+  mutate(
+    income_grp = if_else(
+      income_clean > 4, 
+      "higher", "lower"
+    )
+  ) %>% 
+  count(income_grp, included) %>% 
+  mutate(
+    per = if_else(
+      included == 1, 
+      n / 63, n / 115
+    )
+  ) %>% 
+  arrange(included)
+
+```
+
+###ISI
+```{r}
+isi_all <- 
+  questionnaires %>% 
+  select(
+    ID, 
+    ISI_total
+  ) %>% 
+  left_join(
+    free_play_wf %>% 
+      select(
+        ID,
+        sens_M
+      ),
+    by = "ID"
+  ) %>% 
+  mutate(
+    included = if_else(
+      !is.na(sens_M),
+      1, 0
+    )
+  )
+
+isi_all %>% 
+  filter(!is.na(ISI_total)) %>% 
+  count(included)
+
+isi_all %>% 
+  group_by(included) %>% 
+  summarise(
+    mean(ISI_total, na.rm = TRUE)
+  )
+
+t.test(isi_all$ISI_total ~ isi_all$included)
+```
+
+
+
