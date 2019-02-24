@@ -32,11 +32,7 @@ data_wf <-
   left_join(
     read_csv(intervention_file) %>% 
       mutate(
-        ID = as.numeric(ID),
-        Condition = if_else(
-          Condition == "ABTi",
-          "ABTI", Condition
-        )
+        ID = as.numeric(ID)
       ),
     by = "ID"
   ) %>%  
@@ -80,11 +76,7 @@ data_lf <-
   left_join(
     read_csv(intervention_file) %>% 
       mutate(
-        ID = as.numeric(ID),
-        Condition = if_else(
-          Condition == "ABTi",
-          "ABTI", Condition
-        )
+        ID = as.numeric(ID)
       ),
     by = "ID"
   ) %>% 
@@ -161,6 +153,23 @@ semi_join(actigraphy_wf, sleep_diary_wf) %>% count()
 ```
 
 ## Demographics
+
+Education:
+o Less than sixth grade   (1) 
+o Less than twelfth grade   (2) 
+o High School or GED equivalent   (3) 
+o Some college or trade school   (4) 
+o A.A. (2-year college degree)   (5) 
+o B.A. or B.S. (4-year college degree)   (6) 
+o Graduate or professional degree   (7) 
+
+1 Less than $14,999 
+2 $15,000 - $29,999 
+3 $30,000 - $54,999 
+4 $55,000 - $99,999
+5 $100,000 or More 
+6 Don’t Know 
+
 ```{r}
 data_wf %>% 
   count(Condition)
