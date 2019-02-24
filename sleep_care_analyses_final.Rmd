@@ -9,7 +9,6 @@ output: html_notebook
 library(tidyverse)
 library(lme4)
 library(lmerTest)
-library(jtools)
 library(nlme)
 library(corrr)
 library(sjstats)
@@ -685,6 +684,8 @@ std_beta(ml_SC)
 ```
 
 #### objective sleep contunuity: simple slopes
+
+Worse continuity. 
 ```{r}
 ml_SC_lo <- lmer(
   sens_fin ~ 
@@ -700,6 +701,7 @@ summary(ml_SC_lo)
 std_beta(ml_SC_lo)
 ```
 
+Better continuity.
 ```{r}
 ml_SC_hi <- lmer(
   sens_fin ~ 
@@ -852,7 +854,12 @@ ml_WT <- lmer(
   )
 
 
-johnson_neyman(ml_WT, pred = episode_re, modx = wake_time_ac, control.fdr = TRUE)
+interactions::johnson_neyman(
+  ml_WT, 
+  pred = episode_re, 
+  modx = wake_time_ac, 
+  control.fdr = TRUE
+)
 ggsave("~/Desktop/BABIES/manber_sleep/manber_sleep_sync/plots/johnson_neyman_wt.jpeg", width = 9, height = 7)
 
 data_wf %>% 
@@ -876,7 +883,12 @@ ml_WB <- lmer(
   )
 
 
-johnson_neyman(ml_WB, pred = episode_re, modx = wake_bouts_ac, control.fdr = TRUE)
+interactions::johnson_neyman(
+  ml_WB, 
+  pred = episode_re, 
+  modx = wake_bouts_ac, 
+  control.fdr = TRUE
+)
 ggsave("~/Desktop/BABIES/manber_sleep/manber_sleep_sync/plots/johnson_neyman_wb.jpeg", width = 9, height = 7)
 
 data_wf %>% 
