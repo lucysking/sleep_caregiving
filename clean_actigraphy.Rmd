@@ -14,7 +14,6 @@ library(ggcorrplot)
 
 #maternal actigraphy scores 
 maternal_actigraphy_file <- "~/Desktop/BABIES/manber_sleep/data/final_actigraphy_20180815.xlsx"
-
 freeplay_date_file <- "~/Desktop/BABIES/manber_sleep/data/freeplay_date.csv"
 ```
 
@@ -129,5 +128,9 @@ actigraphy_wf %>%
   group_by(!is.na(sleep_time_ac)) %>% 
   count()
 
+```
+
+```{r}
+#write_csv(actigraphy_wf, "~/Desktop/BABIES/manber_sleep/data/oxytocin/actigraphy_18weeks.csv")
 ```
 
