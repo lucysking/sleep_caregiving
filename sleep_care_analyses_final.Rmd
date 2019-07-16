@@ -421,7 +421,7 @@ data_sleep_efa <-
 ```
 
 #### Check factorability
-Barlett's test: Compare correlation matrix to identify matrix (no correlation matrix). Null is that there is no difference between the matrices. 
+Barlett's test: Compare correlation matrix to identity matrix (no correlation matrix). Null is that there is no difference between the matrices. 
 ```{r}
 cortest.bartlett(corr_sleep_plot)
 ```
@@ -899,11 +899,25 @@ data_wf %>%
   
 ```
 
+### objective total sleep time
+```{r}
+ml_ST <- lmer(
+  sens_fin ~ 
+    episode_re * sleep_time_ac + 
+    Condition + 
+    site + 
+    (1|ID), 
+  REML = FALSE,
+  data = data_lf
+)
 
+summary(ml_ST)
+std_beta(ml_ST)
+```
 
 ##Additional analyses
 
-###adjusting for depression symptoms and infant negative mood
+###adjusting for depression symptoms, infant negative mood, and income
 ```{r}
 ml_SC_cov <- lmer(
   sens_fin ~ 
@@ -912,10 +926,11 @@ ml_SC_cov <- lmer(
     site + 
     episode_re * epds_cent +
     episode_re * negmood_cent +
+    episode_re * scale(income, scale = FALSE) +
     (1|ID), 
   REML = FALSE,
   data = data_lf
-  )
+)
 
 summary(ml_SC_cov)
 #confint(ml_WT_cov)
@@ -932,12 +947,61 @@ ml_ISI <- lmer(
     (1|ID), 
   REML = FALSE,
   data = data_lf
-  )
+)
 
 summary(ml_ISI)
 std_beta(ml_ISI)
 
 glimpse(data_lf)
+```
+
+###adjusting for days of actigraphy
+```{r}
+data_wf %>% 
+  count(n_days_ac) %>% 
+  ggplot(aes(x = n_days_ac, y = n)) +
+  geom_col() +
+  scale_x_continuous(breaks = seq.int(1, 8, 1)) +
+  labs(
+    x = "Days of actigraphy",
+    y = "Count"
+  )
+
+ggsave("~/Desktop/BABIES/manber_sleep/manber_sleep_sync/plots/days_ac_hist.png")
+
+data_lf_ndays_ac <-
+  data_lf %>% 
+  filter(n_days_ac >= 4)
+
+ml_nday_ac <- lmer(
+  sens_fin ~ 
+    episode_re * sleep_continuity_ac + 
+    Condition + 
+    site + 
+    (1|ID), 
+  REML = FALSE,
+  data = data_lf_ndays_ac
+)
+
+summary(ml_nday_ac)
+std_beta(ml_nday_ac)
+```
+
+###adjusting for income
+```{r}
+ml_income_ac <- lmer(
+  sens_fin ~ 
+    episode_re * sleep_continuity_ac + 
+    episode_re * scale(income) +
+    Condition + 
+    site + 
+    (1|ID), 
+  REML = FALSE,
+  data = data_lf_ndays_ac
+)
+
+summary(ml_income_ac)
+std_beta(ml_income_ac)
 ```
 
 ##Evaluate differences between final sample and those who did not complete the free play
@@ -1045,6 +1109,13 @@ demographics_all %>%
     )
   ) %>% 
   arrange(included)
+
+
+demographics_all %>% 
+  group_by(site) %>% 
+  summarize(
+    mean(income, na.rm = TRUE)
+  )
 
 ```
 
